@@ -315,6 +315,8 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
         // Only compute for files missing tokens (skip folders)
         const missing: string[] = []
         for (const f of fileList) {
+          // Skip root marker and any directory-like paths (convention: end with '/')
+          if (f === '__ROOT__' || f.endsWith('/')) continue
           if (!fileTokens[f]) missing.push(f)
         }
         if (missing.length === 0) return
