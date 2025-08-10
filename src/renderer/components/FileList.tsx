@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react'
 import { Tree } from 'react-arborist'
 import { useRepoContext } from '../hooks/useRepoContext'
-import { calculateFolderTokens, formatTokenCount, calculateTokenPercentage, getTokenColorClass } from '../../common/tokenUtils'
+import { calculateFolderTokens, formatTokenCount } from '../../common/tokenUtils'
 
 interface TreeNode {
   id: string
@@ -210,20 +210,94 @@ function getFileIcon(name: string | undefined, isFolder: boolean, isOpen?: boole
   )
 }
 
-interface FileListProps {
-  isTreeCollapsed?: boolean
+interface FileListFilters {
+  minTokens: number
+  maxTokens?: number
+  text: string
+  hideBinary: boolean
+  hideLocks: boolean
+  hideArtifacts: boolean
 }
 
-export function FileList({ isTreeCollapsed = false }: FileListProps) {
-  const { baseDir, fileList, selectedFiles, toggleSelectedFile, getTokenData, fileTokens, totalSelectedTokens, updateFileTokens } = useRepoContext()
+interface FileListProps {
+  isTreeCollapsed?: boolean
+  tokenBudget?: number
+  sortMode?: 'path' | 'tokensDesc' | 'tokensAsc' | 'recent'
+  filters?: FileListFilters
+}
+
+export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortMode = 'path', filters }: FileListProps) {
+  const { baseDir, fileList, selectedFiles, toggleSelectedFile, fileTokens, totalSelectedTokens, updateFileTokens } = useRepoContext()
   const containerRef = useRef<HTMLDivElement>(null)
   const treeRef = useRef<any>(null)
   const [containerHeight, setContainerHeight] = useState(400)
 
+  // Simple classifiers
+  const isLockFile = (p: string) => /(^|\/)((package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Pipfile\.lock|Cargo\.lock|Gemfile\.lock|composer\.lock|Podfile\.lock))$/i.test(p)
+  const isArtifactPath = (p: string) => /(^|\/)(dist|build|\.build|node_modules|out)(\/|$)/i.test(p) || /\.map$|\.min\.js$/i.test(p)
+  const isBinaryLike = (p: string) => /\.(png|jpg|jpeg|gif|svg|webp|ico|pdf|zip|gz|tar|tgz|7z|exe|dll|so|a|bin|class|o|obj|wasm)$/i.test(p)
+
+  const passesFilters = (p: string, tokens: number | undefined) => {
+    if (filters) {
+      const { minTokens, maxTokens, text, hideBinary, hideLocks, hideArtifacts } = filters
+      if (hideBinary && isBinaryLike(p)) return false
+      if (hideLocks && isLockFile(p)) return false
+      if (hideArtifacts && isArtifactPath(p)) return false
+      if (text && !p.toLowerCase().includes(text.toLowerCase())) return false
+      if (typeof minTokens === 'number') {
+        if ((tokens ?? 0) < minTokens) return false
+      }
+      if (typeof maxTokens === 'number') {
+        if ((tokens ?? 0) > maxTokens) return false
+      }
+    }
+    return true
+  }
+
+  const filteredFiles = useMemo(() => {
+    if (!fileList.length) return [] as string[]
+    return fileList.filter(p => {
+      if (p === '__ROOT__' || p.endsWith('/')) return false
+      const t = fileTokens[p]
+      return passesFilters(p, t)
+    })
+  }, [fileList, fileTokens, filters])
+
   const treeData = useMemo(() => {
-    if (!fileList.length || !baseDir) return []
-    return buildArboristTree(fileList, baseDir)
-  }, [fileList, baseDir])
+    if (!filteredFiles.length || !baseDir) return []
+    return buildArboristTree(filteredFiles, baseDir)
+  }, [filteredFiles, baseDir])
+
+  // Sorting by tokens or path
+  useEffect(() => {
+    if (!treeData.length) return
+    const tokenOf = (n: TreeNode): number => {
+      if (!n) return 0
+      if (!n.isFolder) return fileTokens[n.path] || 0
+      return calculateFolderTokens(n, fileTokens)
+    }
+    const sortNodes = (nodes?: TreeNode[]) => {
+      if (!nodes) return
+      nodes.sort((a, b) => {
+        if (sortMode === 'path' || sortMode === 'recent') {
+          // TODO: recent fallback to path until mtimes available
+          if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1
+          return a.name.localeCompare(b.name)
+        }
+        const at = tokenOf(a)
+        const bt = tokenOf(b)
+        const dir = sortMode === 'tokensDesc' ? -1 : 1
+        if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1
+        if (at === bt) return a.name.localeCompare(b.name)
+        return at < bt ? dir : -dir
+      })
+      nodes.forEach(ch => sortNodes(ch.children))
+    }
+    const root = treeData[0]
+    sortNodes(root?.children)
+    // We intentionally do not set state; react-arborist reads our data array by reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treeData, fileTokens, sortMode])
 
   // Estimate width needed to avoid cutting off long nested names
   const estimatedWidth = useMemo(() => {
@@ -413,23 +487,13 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
     const selected = isSelected(nodeData)
     const icon = getFileIcon(nodeData.name, nodeData.isFolder, node.isOpen)
     
-    // For files, get token data directly. For folders, calculate total tokens if collapsed
-    const tokenData = !nodeData.isFolder ? getTokenData(nodeData.path) : null
-    const folderTokenData = nodeData.isFolder && !node.isOpen && nodeData.path !== '__ROOT__' ? (() => {
-      const folderTokens = calculateFolderTokens(nodeData, fileTokens)
-      if (folderTokens === 0) return null
-      
-      const percentage = calculateTokenPercentage(folderTokens, totalSelectedTokens)
-      const colorClass = getTokenColorClass(percentage)
-      
-      return {
-        tokens: folderTokens,
-        percentage,
-        formatted: formatTokenCount(folderTokens),
-        colorClass,
-        shouldShow: true
-      }
-    })() : null
+    // Token display (always visible) based on budget percent
+    const fileTokensCount = !nodeData.isFolder ? (fileTokens[nodeData.path] || 0) : 0
+    const folderTokensCount = nodeData.isFolder ? calculateFolderTokens(nodeData, fileTokens) : 0
+    const tokensCount = nodeData.isFolder ? folderTokensCount : fileTokensCount
+    const pct = tokenBudget > 0 ? (tokensCount / tokenBudget) * 100 : 0
+    const pctText = `${pct.toFixed(1)}%`
+    const colorClass = pct > 5 ? 'text-red-500' : pct >= 1 ? 'text-amber-500' : 'text-green-500'
     
     const handleClick = () => {
       if (nodeData.isFolder) {
@@ -572,19 +636,13 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
           {nodeData.name || 'Unknown'}
         </span>
         
-        {/* Token info for files */}
-        {tokenData && tokenData.shouldShow && (
-          <span className={`text-xs ml-2 font-mono ${tokenData.colorClass}`}>
-            ({tokenData.formatted} ⏺ {tokenData.percentage}%)
-          </span>
-        )}
-        
-        {/* Token info for collapsed folders */}
-        {folderTokenData && folderTokenData.shouldShow && (
-          <span className={`text-xs ml-2 font-mono ${folderTokenData.colorClass}`}>
-            ({folderTokenData.formatted} ⏺ {folderTokenData.percentage}%)
-          </span>
-        )}
+        {/* Token chip (always visible) */}
+        <span
+          className={`text-xs ml-2 font-mono ${colorClass}`}
+          title={`${tokensCount} tokens • ${pctText} of budget`}
+        >
+          ({formatTokenCount(tokensCount)} ⏺ {pctText})
+        </span>
       </div>
     )
   }

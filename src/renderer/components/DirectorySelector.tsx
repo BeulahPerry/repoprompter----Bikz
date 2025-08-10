@@ -50,6 +50,14 @@ export function DirectorySelector() {
   }
 
   // unified header uses direct event target for anchoring the Save Group modal
+  const [tokenBudget, setTokenBudget] = React.useState<number>(200_000)
+  const [sortMode, setSortMode] = React.useState<'path' | 'tokensDesc' | 'tokensAsc' | 'recent'>('path')
+  const [minTokens, setMinTokens] = React.useState<number>(0)
+  const [maxTokens, setMaxTokens] = React.useState<number | undefined>(undefined)
+  const [textFilter, setTextFilter] = React.useState<string>('')
+  const [hideBinary, setHideBinary] = React.useState<boolean>(true)
+  const [hideLocks, setHideLocks] = React.useState<boolean>(true)
+  const [hideArtifacts, setHideArtifacts] = React.useState<boolean>(true)
 
   return (
     <div className="flex flex-col h-full gap-2">
@@ -64,17 +72,18 @@ export function DirectorySelector() {
               {baseDir ? baseDir.split('/').pop() : 'Repository'}
             </h3>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button onClick={handleSelectDirectory} variant="primary" size="sm">
+          <div className="flex items-center gap-2 whitespace-nowrap overflow-x-auto no-scrollbar">
+            <Button onClick={handleSelectDirectory} variant={baseDir ? 'ghost' : 'primary'} size="sm" className="shrink-0">
               Open Repo
             </Button>
-            <Button onClick={handleRefreshDirectory} variant="secondary" size="sm" disabled={!baseDir}>
+            <Button onClick={handleRefreshDirectory} variant="secondary" size="sm" disabled={!baseDir} className="shrink-0">
               Refresh
             </Button>
             <Button
               onClick={(e) => createGroupFromSelection(e.currentTarget as unknown as HTMLElement)}
               variant="secondary"
               size="sm"
+              className="shrink-0"
             >
               Save Group
             </Button>
@@ -82,7 +91,7 @@ export function DirectorySelector() {
               onClick={unselectUnnecessaryFiles}
               variant="ghost"
               size="sm"
-              className="text-xs"
+              className="shrink-0"
               disabled={!baseDir}
             >
               Clean Selection
@@ -95,8 +104,11 @@ export function DirectorySelector() {
               aria-label="Expand all folders"
               title="Expand all"
               disabled={!baseDir}
+              className="shrink-0 px-2"
             >
-              Expand
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </Button>
             <Button
               onClick={() => setIsTreeCollapsed(true)}
@@ -105,14 +117,101 @@ export function DirectorySelector() {
               aria-label="Collapse all folders"
               title="Collapse all"
               disabled={!baseDir}
+              className="shrink-0 px-2"
             >
-              Collapse
+              <svg className="w-4 h-4 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </Button>
           </div>
         </CardHeader>
-        <CardBody className="p-2 overflow-auto">
+        <CardBody className="p-2 overflow-auto h-[70vh]">
           {baseDir ? (
-            <FileList isTreeCollapsed={isTreeCollapsed} />
+            <>
+              {/* Toolbar: budget, sort, filters */}
+              <div className="flex items-center gap-2 px-2 pb-2 border-b border-muted/30">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-tertiary">Budget</span>
+                  <input
+                    type="number"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 py-1 text-xs w-28"
+                    value={tokenBudget}
+                    min={10000}
+                    step={1000}
+                    onChange={(e) => setTokenBudget(Number(e.target.value || 0))}
+                    title="Token budget"
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-tertiary">Sort</span>
+                  <select
+                    className="bg-elev-2 border border-muted/40 rounded px-2 py-1 text-xs"
+                    value={sortMode}
+                    onChange={(e) => setSortMode(e.target.value as any)}
+                  >
+                    <option value="path">Path</option>
+                    <option value="tokensDesc">Tokens (desc)</option>
+                    <option value="tokensAsc">Tokens (asc)</option>
+                    <option value="recent">Recently Modified</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-tertiary">Min</span>
+                  <input
+                    type="number"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 py-1 text-xs w-20"
+                    value={minTokens}
+                    min={0}
+                    step={100}
+                    onChange={(e) => setMinTokens(Number(e.target.value || 0))}
+                    title="Only show files with tokens >= Min"
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-tertiary">Max</span>
+                  <input
+                    type="number"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 py-1 text-xs w-20"
+                    value={maxTokens ?? ''}
+                    min={0}
+                    step={100}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setMaxTokens(v === '' ? undefined : Number(v))
+                    }}
+                    title="Hide files with tokens > Max"
+                  />
+                </div>
+                <div className="flex items-center gap-1 flex-1 min-w-0">
+                  <span className="text-xs text-tertiary">Filter</span>
+                  <input
+                    type="text"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 py-1 text-xs w-full"
+                    placeholder="path contains..."
+                    value={textFilter}
+                    onChange={(e) => setTextFilter(e.target.value)}
+                  />
+                </div>
+                <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
+                  <input type="checkbox" checked={hideBinary} onChange={(e) => setHideBinary(e.target.checked)} />
+                  Hide binary
+                </label>
+                <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
+                  <input type="checkbox" checked={hideLocks} onChange={(e) => setHideLocks(e.target.checked)} />
+                  Hide locks
+                </label>
+                <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
+                  <input type="checkbox" checked={hideArtifacts} onChange={(e) => setHideArtifacts(e.target.checked)} />
+                  Hide artifacts
+                </label>
+              </div>
+              <FileList
+                isTreeCollapsed={isTreeCollapsed}
+                tokenBudget={tokenBudget}
+                sortMode={sortMode}
+                filters={{ minTokens, maxTokens, text: textFilter, hideBinary, hideLocks, hideArtifacts }}
+              />
+            </>
           ) : (
             <div className="h-40 flex items-center justify-center text-sm text-tertiary">
               No repository selected
