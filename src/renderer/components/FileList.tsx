@@ -215,7 +215,7 @@ interface FileListProps {
 }
 
 export function FileList({ isTreeCollapsed = false }: FileListProps) {
-  const { baseDir, fileList, selectedFiles, toggleSelectedFile, getTokenData, fileTokens, totalSelectedTokens } = useRepoContext()
+  const { baseDir, fileList, selectedFiles, toggleSelectedFile, getTokenData, fileTokens, totalSelectedTokens, updateFileTokens } = useRepoContext()
   const containerRef = useRef<HTMLDivElement>(null)
   const treeRef = useRef<any>(null)
   const [containerHeight, setContainerHeight] = useState(400)
@@ -224,6 +224,37 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
     if (!fileList.length || !baseDir) return []
     return buildArboristTree(fileList, baseDir)
   }, [fileList, baseDir])
+
+  // Estimate width needed to avoid cutting off long nested names
+  const estimatedWidth = useMemo(() => {
+    const INDENT = 14 // keep in sync with Tree indent
+    const ICONS_AND_CONTROLS = 64 // arrow + checkbox + icon + paddings
+
+    const compute = (nodes: TreeNode[] | undefined, depth: number): number => {
+      if (!nodes) return 0
+      let maxPx = 0
+      for (const n of nodes) {
+        const nameLen = (n.name || '').length
+        // Approximate character width in px (monospace-ish feel)
+        const namePx = nameLen * 8
+        const rowPx = depth * INDENT + ICONS_AND_CONTROLS + namePx
+        if (rowPx > maxPx) maxPx = rowPx
+        if (n.children && n.children.length) {
+          maxPx = Math.max(maxPx, compute(n.children, depth + 1))
+        }
+      }
+      return maxPx
+    }
+
+    try {
+      const root = treeData[0]
+      const innerWidth = compute(root?.children, 1)
+      // Minimum sensible width
+      return Math.max(360, innerWidth)
+    } catch {
+      return 360
+    }
+  }, [treeData])
 
   const selectedSet = useMemo(() => new Set(selectedFiles), [selectedFiles])
 
@@ -253,24 +284,68 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
         // Close all folders except root
         tree.closeAll()
         // Keep root open
-        if (tree.root?.children?.[0]) {
-          tree.open('__ROOT__')
-        }
-      } else {
-        // Open root and first level folders
         tree.open('__ROOT__')
-        // Open first level folders (direct children of root)
-        const rootNode = treeData[0]
-        if (rootNode?.children) {
-          rootNode.children.forEach(child => {
-            if (child.isFolder) {
-              tree.open(child.id)
+      } else {
+        // Open all folders recursively
+        const openAll = (nodes?: TreeNode[]) => {
+          if (!nodes) return
+          for (const n of nodes) {
+            if (n.isFolder) {
+              tree.open(n.id)
+              openAll(n.children)
             }
-          })
+          }
         }
+        tree.open('__ROOT__')
+        const rootNode = treeData[0]
+        openAll(rootNode?.children)
       }
     }, 50)
   }, [isTreeCollapsed, treeData])
+
+  // Background token precomputation for all files (lazy, batched)
+  useEffect(() => {
+    if (!baseDir || !fileList.length) return
+
+    let cancelled = false
+    const BATCH = 75
+
+    const run = async () => {
+      try {
+        // Only compute for files missing tokens (skip folders)
+        const missing: string[] = []
+        for (const f of fileList) {
+          if (!fileTokens[f]) missing.push(f)
+        }
+        if (missing.length === 0) return
+
+        for (let i = 0; i < missing.length && !cancelled; i += BATCH) {
+          const batch = missing.slice(i, i + BATCH)
+          const { contents } = await window.api.readMultipleFileContents(baseDir, batch)
+          if (cancelled) break
+          for (const [filePath, content] of Object.entries(contents)) {
+            if (
+              content &&
+              !content.startsWith('// File too large') &&
+              !content.startsWith('// Error reading file')
+            ) {
+              updateFileTokens(filePath, content)
+            }
+          }
+          // Yield to UI
+          if (i + BATCH < missing.length) {
+            await new Promise(r => setTimeout(r, 40))
+          }
+        }
+      } catch (e) {
+        console.error('Background token precompute failed:', e)
+      }
+    }
+
+    // kick off after a short delay to avoid blocking initial render
+    const t = setTimeout(run, 150)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [baseDir, fileList, fileTokens, updateFileTokens])
 
   const handleSelect = (nodes: TreeNode[]) => {
     // Handle selection changes
@@ -489,7 +564,7 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
         />
         <div className="mr-1.5 flex-shrink-0">{icon}</div>
         <span 
-          className="truncate text-gray-800 dark:text-gray-200 text-[13px] cursor-pointer flex-1 font-medium tracking-normal"
+          className="whitespace-nowrap text-gray-800 dark:text-gray-200 text-[13px] cursor-pointer flex-1 font-medium tracking-normal"
           onClick={handleClick}
         >
           {nodeData.name || 'Unknown'}
@@ -547,7 +622,7 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
           ref={treeRef}
           data={treeData}
           openByDefault={true}
-          width={containerRef.current?.clientWidth || 360}
+          width={Math.max(containerRef.current?.clientWidth || 360, estimatedWidth)}
           height={Math.max(containerHeight - tokenDisplayHeight, 220)} // Ensure minimum height
           indent={14}
           rowHeight={26}
