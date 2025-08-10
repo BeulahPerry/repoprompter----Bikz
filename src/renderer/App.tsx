@@ -32,6 +32,8 @@ function App() {
         {/* Modern glass header */}
         <header className="draggable glass-surface border-b border-surface backdrop-blur-lg z-10">
           <div className="flex items-center justify-between px-6 h-14">
+            {/* Left spacer to clear macOS window controls */}
+            <div className="w-16 sm:w-20 md:w-24 h-full" />
             <div className="flex items-center gap-3">
               <img
                 src="/repoprompter-logo.png"
@@ -68,7 +70,8 @@ function App() {
         {/* Main 3-column layout */}
         <div className="flex-1 flex overflow-hidden p-2 gap-2">
           {/* Sidebar: Repository & Files */}
-          <aside className="w-80 flex flex-col gap-2">
+          {/* Wider sidebar to improve file/folder name visibility */}
+          <aside className="w-96 flex flex-col gap-2">
             <DirectorySelector />
           </aside>
 

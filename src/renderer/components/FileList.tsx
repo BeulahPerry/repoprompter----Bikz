@@ -427,7 +427,7 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
       <div
         ref={dragHandle}
         style={style}
-        className={`flex items-center py-1 px-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 text-sm transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-inset ${
+        className={`flex items-center py-1 px-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 text-[13px] transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-inset ${
           selected ? 'bg-blue-50 dark:bg-blue-900/30 font-medium' : ''
         }`}
         role="treeitem"
@@ -455,13 +455,13 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
               e.stopPropagation()
               node.toggle()
             }}
-            className="w-5 h-5 flex items-center justify-center mr-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-all opacity-70 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+            className="w-4 h-4 flex items-center justify-center mr-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-all opacity-70 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
             aria-label={`${node.isOpen ? 'Collapse' : 'Expand'} folder ${nodeData.name}`}
             aria-expanded={node.isOpen}
           >
             <svg
-              width="8"
-              height="8"
+              width="7"
+              height="7"
               viewBox="0 0 24 24"
               fill="none"
               className={`transform transition-transform duration-150 ${node.isOpen ? 'rotate-90' : ''}`}
@@ -484,12 +484,12 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
           checked={selected}
           onChange={() => {}}
           onClick={handleClick}
-          className="mr-2 w-4 h-4 rounded border-2 border-gray-300 dark:border-gray-600 cursor-pointer accent-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+          className="mr-1.5 w-3.5 h-3.5 rounded border-2 border-gray-300 dark:border-gray-600 cursor-pointer accent-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
           aria-label={`${selected ? 'Unselect' : 'Select'} ${nodeData.isFolder ? 'folder' : 'file'} ${nodeData.name}`}
         />
-        <div className="mr-2 flex-shrink-0">{icon}</div>
+        <div className="mr-1.5 flex-shrink-0">{icon}</div>
         <span 
-          className="truncate text-gray-800 dark:text-gray-200 text-sm cursor-pointer flex-1 font-medium"
+          className="truncate text-gray-800 dark:text-gray-200 text-[13px] cursor-pointer flex-1 font-medium tracking-normal"
           onClick={handleClick}
         >
           {nodeData.name || 'Unknown'}
@@ -542,18 +542,15 @@ export function FileList({ isTreeCollapsed = false }: FileListProps) {
 
   return (
     <div className="flex-1 flex flex-col">
-      <div ref={containerRef} className="flex-1 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+      <div ref={containerRef} className="flex-1 overflow-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
         <Tree
           ref={treeRef}
           data={treeData}
-          openByDefault={(node) => {
-            // Always open root by default, let the effect handle the rest
-            return node.data?.path === '__ROOT__'
-          }}
-          width={containerRef.current?.clientWidth || 300}
-          height={Math.max(containerHeight - tokenDisplayHeight, 200)} // Ensure minimum height
-          indent={20}
-          rowHeight={24}
+          openByDefault={true}
+          width={containerRef.current?.clientWidth || 360}
+          height={Math.max(containerHeight - tokenDisplayHeight, 220)} // Ensure minimum height
+          indent={14}
+          rowHeight={26}
           overscanCount={20}
           disableDrop
           disableDrag
