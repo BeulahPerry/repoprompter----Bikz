@@ -178,29 +178,57 @@ function setupIpcHandlers() {
   ipcMain.handle('fs:readMultipleFiles', async (_, { baseDir, files }) => {
     const contents: Record<string, string> = {}
     const errors: string[] = []
-    
+
     await Promise.all(
       files.map(async (file: string) => {
         try {
           const fullPath = path.join(baseDir, file)
-          const stats = await fs.promises.stat(fullPath)
+          const stats = await fs.promises.lstat(fullPath)
+
+          // Skip directories and symlinks to directories
+          if (stats.isDirectory()) {
+            errors.push(`${file} (is a directory)`)
+            contents[file] = `// Skipped directory: ${file}`
+            return
+          }
+          if (stats.isSymbolicLink()) {
+            // Resolve symlink target and ensure it is a regular file
+            try {
+              const real = await fs.promises.stat(fullPath)
+              if (real.isDirectory()) {
+                errors.push(`${file} (symlink to directory)`)
+                contents[file] = `// Skipped symlink to directory: ${file}`
+                return
+              }
+            } catch (e) {
+              errors.push(`${file} (broken symlink)`)
+              contents[file] = `// Skipped broken symlink: ${file}`
+              return
+            }
+          }
+
           const fileSizeInMB = stats.size / (1024 * 1024)
-          
           if (fileSizeInMB > 5) {
             errors.push(`${file} (${fileSizeInMB.toFixed(1)} MB - too large)`)
             contents[file] = `// File too large (${fileSizeInMB.toFixed(1)} MB) - content not loaded`
             return
           }
-          
+
           const data = await fs.promises.readFile(fullPath, 'utf-8')
           contents[file] = data
-        } catch (err) {
+        } catch (err: any) {
+          // Handle EISDIR explicitly, though we guard above
+          if (err && err.code === 'EISDIR') {
+            errors.push(`${file} (is a directory)`)
+            contents[file] = `// Skipped directory: ${file}`
+            return
+          }
           console.error(`Failed to read file '${file}':`, err)
           contents[file] = `// Error reading file: ${err}`
         }
       })
     )
-    
+
     return { contents, errors }
   })
 

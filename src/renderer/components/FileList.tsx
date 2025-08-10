@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react'
 import { Tree } from 'react-arborist'
 import { useRepoContext } from '../hooks/useRepoContext'
-import { calculateFolderTokens, formatTokenCount } from '../../common/tokenUtils'
+import { formatTokenCount } from '../../common/tokenUtils'
 
 interface TreeNode {
   id: string
@@ -231,6 +231,9 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
   const containerRef = useRef<HTMLDivElement>(null)
   const treeRef = useRef<any>(null)
   const [containerHeight, setContainerHeight] = useState(400)
+  const runNonceRef = useRef(0)
+  const interactingRef = useRef(false)
+  const pauseTimerRef = useRef<number | null>(null)
 
   // Simple classifiers
   const isLockFile = (p: string) => /(^|\/)((package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Pipfile\.lock|Cargo\.lock|Gemfile\.lock|composer\.lock|Podfile\.lock))$/i.test(p)
@@ -268,36 +271,62 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
     return buildArboristTree(filteredFiles, baseDir)
   }, [filteredFiles, baseDir])
 
-  // Sorting by tokens or path
-  useEffect(() => {
-    if (!treeData.length) return
+  // Precompute aggregated tokens for every node (files and folders) once per tree/tokens
+  const aggTokensByPath = useMemo((): Record<string, number> => {
+    const map: Record<string, number> = {}
+    if (!treeData.length) return map
+
+    const dfs = (node: TreeNode): number => {
+      if (!node) return 0
+      if (!node.isFolder) {
+        const t = fileTokens[node.path] || 0
+        map[node.path] = t
+        return t
+      }
+      let sum = 0
+      if (node.children && node.children.length) {
+        for (const ch of node.children) sum += dfs(ch)
+      }
+      map[node.path] = sum
+      return sum
+    }
+
+    // include root too
+    dfs(treeData[0])
+    return map
+  }, [treeData, fileTokens])
+
+  // Build a sorted tree without mutating the original
+  const sortedTreeData = useMemo(() => {
+    if (!treeData.length) return treeData
+
     const tokenOf = (n: TreeNode): number => {
       if (!n) return 0
-      if (!n.isFolder) return fileTokens[n.path] || 0
-      return calculateFolderTokens(n, fileTokens)
+      return aggTokensByPath[n.path] ?? (n.isFolder ? 0 : (fileTokens[n.path] || 0))
     }
-    const sortNodes = (nodes?: TreeNode[]) => {
-      if (!nodes) return
-      nodes.sort((a, b) => {
-        if (sortMode === 'path' || sortMode === 'recent') {
-          // TODO: recent fallback to path until mtimes available
+
+    const cloneAndSort = (node: TreeNode): TreeNode => {
+      const children = node.children?.map(cloneAndSort) ?? []
+      const clone: TreeNode = { ...node, children }
+      if (children.length) {
+        children.sort((a, b) => {
+          if (sortMode === 'path' || sortMode === 'recent') {
+            if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1
+            return a.name.localeCompare(b.name)
+          }
+          const at = tokenOf(a)
+          const bt = tokenOf(b)
+          const dir = sortMode === 'tokensDesc' ? -1 : 1
           if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1
-          return a.name.localeCompare(b.name)
-        }
-        const at = tokenOf(a)
-        const bt = tokenOf(b)
-        const dir = sortMode === 'tokensDesc' ? -1 : 1
-        if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1
-        if (at === bt) return a.name.localeCompare(b.name)
-        return at < bt ? dir : -dir
-      })
-      nodes.forEach(ch => sortNodes(ch.children))
+          if (at === bt) return a.name.localeCompare(b.name)
+          return at < bt ? dir : -dir
+        })
+      }
+      return clone
     }
-    const root = treeData[0]
-    sortNodes(root?.children)
-    // We intentionally do not set state; react-arborist reads our data array by reference.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [treeData, fileTokens, sortMode])
+
+    return treeData.map(cloneAndSort)
+  }, [treeData, fileTokens, sortMode, aggTokensByPath])
 
   // Estimate width needed to avoid cutting off long nested names
   const estimatedWidth = useMemo(() => {
@@ -331,6 +360,23 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
   }, [treeData])
 
   const selectedSet = useMemo(() => new Set(selectedFiles), [selectedFiles])
+
+  // Folder path set derived from built tree to help skip directories in precompute
+  const folderPathSet = useMemo(() => {
+    const set = new Set<string>()
+    const root = treeData[0]
+    const walk = (n?: TreeNode[]) => {
+      if (!n) return
+      for (const child of n) {
+        if (child.isFolder) set.add(child.path)
+        if (child.children) walk(child.children)
+      }
+    }
+    if (root?.children) walk(root.children)
+    // Also add root marker to be safe
+    set.add('__ROOT__')
+    return set
+  }, [treeData])
 
   // Calculate container height
   useEffect(() => {
@@ -380,9 +426,10 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
   // Background token precomputation for all files (lazy, batched)
   useEffect(() => {
     if (!baseDir || !fileList.length) return
+    if (interactingRef.current) return
 
     let cancelled = false
-    const BATCH = 75
+    const BATCH = 40
 
     const run = async () => {
       try {
@@ -391,6 +438,8 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
         for (const f of fileList) {
           // Skip root marker and any directory-like paths (convention: end with '/')
           if (f === '__ROOT__' || f.endsWith('/')) continue
+          // Skip known folders from the built tree
+          if (folderPathSet.has(f)) continue
           if (!fileTokens[f]) missing.push(f)
         }
         if (missing.length === 0) return
@@ -410,7 +459,7 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
           }
           // Yield to UI
           if (i + BATCH < missing.length) {
-            await new Promise(r => setTimeout(r, 40))
+            await new Promise(r => setTimeout(r, 75))
           }
         }
       } catch (e) {
@@ -421,7 +470,17 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
     // kick off after a short delay to avoid blocking initial render
     const t = setTimeout(run, 150)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [baseDir, fileList, fileTokens, updateFileTokens])
+  }, [baseDir, fileList, fileTokens, folderPathSet, updateFileTokens, runNonceRef.current])
+
+  // Pause precompute while user interacts with the tree to keep clicks responsive
+  const pausePrecomputeSoon = () => {
+    interactingRef.current = true
+    if (pauseTimerRef.current) window.clearTimeout(pauseTimerRef.current)
+    pauseTimerRef.current = window.setTimeout(() => {
+      interactingRef.current = false
+      runNonceRef.current += 1 // trigger effect rerun
+    }, 600)
+  }
 
   const handleSelect = (nodes: TreeNode[]) => {
     // Handle selection changes
@@ -488,14 +547,13 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
     const icon = getFileIcon(nodeData.name, nodeData.isFolder, node.isOpen)
     
     // Token display (always visible) based on budget percent
-    const fileTokensCount = !nodeData.isFolder ? (fileTokens[nodeData.path] || 0) : 0
-    const folderTokensCount = nodeData.isFolder ? calculateFolderTokens(nodeData, fileTokens) : 0
-    const tokensCount = nodeData.isFolder ? folderTokensCount : fileTokensCount
+    const tokensCount = aggTokensByPath[nodeData.path] || 0
     const pct = tokenBudget > 0 ? (tokensCount / tokenBudget) * 100 : 0
     const pctText = `${pct.toFixed(1)}%`
     const colorClass = pct > 5 ? 'text-red-500' : pct >= 1 ? 'text-amber-500' : 'text-green-500'
     
     const handleClick = () => {
+      pausePrecomputeSoon()
       if (nodeData.isFolder) {
         if (nodeData.path === '__ROOT__') {
           // Special handling for root - select/unselect ALL items (files + directories)
@@ -577,6 +635,7 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
         aria-expanded={nodeData.isFolder ? node.isOpen : undefined}
         aria-label={`${nodeData.isFolder ? 'Folder' : 'File'}: ${nodeData.name}${selected ? ' (selected)' : ''}`}
         onKeyDown={(e) => {
+          pausePrecomputeSoon()
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
             handleClick()
@@ -594,6 +653,7 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
           <button
             onClick={(e) => {
               e.stopPropagation()
+              pausePrecomputeSoon()
               node.toggle()
             }}
             className="w-4 h-4 flex items-center justify-center mr-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-all opacity-70 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
@@ -624,7 +684,7 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
           type="checkbox"
           checked={selected}
           onChange={() => {}}
-          onClick={handleClick}
+          onClick={(e) => { pausePrecomputeSoon(); handleClick() }}
           className="mr-1.5 w-3.5 h-3.5 rounded border-2 border-gray-300 dark:border-gray-600 cursor-pointer accent-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
           aria-label={`${selected ? 'Unselect' : 'Select'} ${nodeData.isFolder ? 'folder' : 'file'} ${nodeData.name}`}
         />
@@ -680,7 +740,7 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
       <div ref={containerRef} className="flex-1 overflow-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
         <Tree
           ref={treeRef}
-          data={treeData}
+          data={sortedTreeData}
           openByDefault={true}
           width={Math.max(containerRef.current?.clientWidth || 360, estimatedWidth)}
           height={Math.max(containerHeight - tokenDisplayHeight, 220)} // Ensure minimum height

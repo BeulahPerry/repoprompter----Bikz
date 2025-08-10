@@ -50,7 +50,6 @@ export function DirectorySelector() {
   }
 
   // unified header uses direct event target for anchoring the Save Group modal
-  const [tokenBudget, setTokenBudget] = React.useState<number>(200_000)
   const [sortMode, setSortMode] = React.useState<'path' | 'tokensDesc' | 'tokensAsc' | 'recent'>('path')
   const [minTokens, setMinTokens] = React.useState<number>(0)
   const [maxTokens, setMaxTokens] = React.useState<number | undefined>(undefined)
@@ -128,26 +127,15 @@ export function DirectorySelector() {
         <CardBody className="p-2 overflow-auto h-[70vh]">
           {baseDir ? (
             <>
-              {/* Toolbar: budget, sort, filters */}
-              <div className="flex items-center gap-2 px-2 pb-2 border-b border-muted/30">
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-tertiary">Budget</span>
-                  <input
-                    type="number"
-                    className="bg-elev-2 border border-muted/40 rounded px-2 py-1 text-xs w-28"
-                    value={tokenBudget}
-                    min={10000}
-                    step={1000}
-                    onChange={(e) => setTokenBudget(Number(e.target.value || 0))}
-                    title="Token budget"
-                  />
-                </div>
-                <div className="flex items-center gap-1">
+              {/* Toolbar: sort, filters (compact, scrollable row) */}
+              <div className="flex items-center gap-2 px-2 pb-2 border-b border-muted/30 overflow-x-auto whitespace-nowrap no-scrollbar">
+                <div className="flex items-center gap-1 shrink-0">
                   <span className="text-xs text-tertiary">Sort</span>
                   <select
-                    className="bg-elev-2 border border-muted/40 rounded px-2 py-1 text-xs"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 h-7 text-xs min-w-[8rem]"
                     value={sortMode}
                     onChange={(e) => setSortMode(e.target.value as any)}
+                    title="Sort files"
                   >
                     <option value="path">Path</option>
                     <option value="tokensDesc">Tokens (desc)</option>
@@ -155,11 +143,11 @@ export function DirectorySelector() {
                     <option value="recent">Recently Modified</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   <span className="text-xs text-tertiary">Min</span>
                   <input
                     type="number"
-                    className="bg-elev-2 border border-muted/40 rounded px-2 py-1 text-xs w-20"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 h-7 text-xs w-20"
                     value={minTokens}
                     min={0}
                     step={100}
@@ -167,11 +155,11 @@ export function DirectorySelector() {
                     title="Only show files with tokens >= Min"
                   />
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   <span className="text-xs text-tertiary">Max</span>
                   <input
                     type="number"
-                    className="bg-elev-2 border border-muted/40 rounded px-2 py-1 text-xs w-20"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 h-7 text-xs w-20"
                     value={maxTokens ?? ''}
                     min={0}
                     step={100}
@@ -182,32 +170,34 @@ export function DirectorySelector() {
                     title="Hide files with tokens > Max"
                   />
                 </div>
-                <div className="flex items-center gap-1 flex-1 min-w-0">
+                <div className="flex items-center gap-1 flex-1 min-w-[160px]">
                   <span className="text-xs text-tertiary">Filter</span>
                   <input
                     type="text"
-                    className="bg-elev-2 border border-muted/40 rounded px-2 py-1 text-xs w-full"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 h-7 text-xs w-full"
                     placeholder="path contains..."
                     value={textFilter}
                     onChange={(e) => setTextFilter(e.target.value)}
+                    title="Filter by path substring"
                   />
                 </div>
-                <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
-                  <input type="checkbox" checked={hideBinary} onChange={(e) => setHideBinary(e.target.checked)} />
-                  Hide binary
-                </label>
-                <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
-                  <input type="checkbox" checked={hideLocks} onChange={(e) => setHideLocks(e.target.checked)} />
-                  Hide locks
-                </label>
-                <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
-                  <input type="checkbox" checked={hideArtifacts} onChange={(e) => setHideArtifacts(e.target.checked)} />
-                  Hide artifacts
-                </label>
+                <div className="flex items-center gap-3 pl-1 shrink-0">
+                  <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
+                    <input className="align-middle" type="checkbox" checked={hideBinary} onChange={(e) => setHideBinary(e.target.checked)} />
+                    <span>Binary</span>
+                  </label>
+                  <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
+                    <input className="align-middle" type="checkbox" checked={hideLocks} onChange={(e) => setHideLocks(e.target.checked)} />
+                    <span>Locks</span>
+                  </label>
+                  <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
+                    <input className="align-middle" type="checkbox" checked={hideArtifacts} onChange={(e) => setHideArtifacts(e.target.checked)} />
+                    <span>Artifacts</span>
+                  </label>
+                </div>
               </div>
               <FileList
                 isTreeCollapsed={isTreeCollapsed}
-                tokenBudget={tokenBudget}
                 sortMode={sortMode}
                 filters={{ minTokens, maxTokens, text: textFilter, hideBinary, hideLocks, hideArtifacts }}
               />
