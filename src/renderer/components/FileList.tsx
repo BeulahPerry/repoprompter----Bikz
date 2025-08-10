@@ -211,12 +211,15 @@ function getFileIcon(name: string | undefined, isFolder: boolean, isOpen?: boole
 }
 
 interface FileListFilters {
-  minTokens: number
+  // New simplified filters: only `search` is used by toolbar now
+  search?: string
+  // Backward compat and internal optional filters
+  text?: string
+  minTokens?: number
   maxTokens?: number
-  text: string
-  hideBinary: boolean
-  hideLocks: boolean
-  hideArtifacts: boolean
+  hideBinary?: boolean
+  hideLocks?: boolean
+  hideArtifacts?: boolean
 }
 
 interface FileListProps {
@@ -242,11 +245,12 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
 
   const passesFilters = (p: string, tokens: number | undefined) => {
     if (filters) {
-      const { minTokens, maxTokens, text, hideBinary, hideLocks, hideArtifacts } = filters
+      const { minTokens, maxTokens, hideBinary, hideLocks, hideArtifacts, search, text } = filters
       if (hideBinary && isBinaryLike(p)) return false
       if (hideLocks && isLockFile(p)) return false
       if (hideArtifacts && isArtifactPath(p)) return false
-      if (text && !p.toLowerCase().includes(text.toLowerCase())) return false
+      const q = (search ?? text ?? '').toLowerCase()
+      if (q && !p.toLowerCase().includes(q)) return false
       if (typeof minTokens === 'number') {
         if ((tokens ?? 0) < minTokens) return false
       }

@@ -51,12 +51,7 @@ export function DirectorySelector() {
 
   // unified header uses direct event target for anchoring the Save Group modal
   const [sortMode, setSortMode] = React.useState<'path' | 'tokensDesc' | 'tokensAsc' | 'recent'>('path')
-  const [minTokens, setMinTokens] = React.useState<number>(0)
-  const [maxTokens, setMaxTokens] = React.useState<number | undefined>(undefined)
-  const [textFilter, setTextFilter] = React.useState<string>('')
-  const [hideBinary, setHideBinary] = React.useState<boolean>(true)
-  const [hideLocks, setHideLocks] = React.useState<boolean>(true)
-  const [hideArtifacts, setHideArtifacts] = React.useState<boolean>(true)
+  const [search, setSearch] = React.useState<string>('')
 
   return (
     <div className="flex flex-col h-full gap-2">
@@ -71,29 +66,62 @@ export function DirectorySelector() {
               {baseDir ? baseDir.split('/').pop() : 'Repository'}
             </h3>
           </div>
-          <div className="flex items-center gap-2 whitespace-nowrap overflow-x-auto no-scrollbar">
-            <Button onClick={handleSelectDirectory} variant={baseDir ? 'ghost' : 'primary'} size="sm" className="shrink-0">
-              Open Repo
+          <div className="flex items-center gap-2 whitespace-nowrap overflow-x-auto no-scrollbar text-secondary">
+            <Button
+              onClick={handleSelectDirectory}
+              variant={baseDir ? 'ghost' : 'primary'}
+              size="sm"
+              className="shrink-0 px-2 hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+              aria-label="Open repository"
+              title="Open repository"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z" strokeWidth="2"/>
+                <path d="M12 13v6M9 16h6" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
             </Button>
-            <Button onClick={handleRefreshDirectory} variant="secondary" size="sm" disabled={!baseDir} className="shrink-0">
-              Refresh
+            <Button
+              onClick={handleRefreshDirectory}
+              variant="secondary"
+              size="sm"
+              disabled={!baseDir}
+              className="shrink-0 px-2 hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+              aria-label="Refresh"
+              title="Refresh"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M4 4v6h6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M20 20v-6h-6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M20 8a8 8 0 0 0-15.5 2M4 16a8 8 0 0 0 15.5-2" strokeWidth="2"/>
+              </svg>
             </Button>
             <Button
               onClick={(e) => createGroupFromSelection(e.currentTarget as unknown as HTMLElement)}
               variant="secondary"
               size="sm"
-              className="shrink-0"
+              className="shrink-0 px-2 hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+              aria-label="Save group"
+              title="Save group"
             >
-              Save Group
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" strokeWidth="2"/>
+                <path d="M9 2v6h6" strokeWidth="2"/>
+                <path d="M8 17h8" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
             </Button>
             <Button
               onClick={unselectUnnecessaryFiles}
               variant="ghost"
               size="sm"
-              className="shrink-0"
+              className="shrink-0 px-2 hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
               disabled={!baseDir}
+              aria-label="Clean selection"
+              title="Clean selection"
             >
-              Clean Selection
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M3 18h13l4-8H7l-4 8z" strokeWidth="2"/>
+                <path d="M7 10l2-4h8l-2 4" strokeWidth="2"/>
+              </svg>
             </Button>
             {/* Expand/Collapse helpers */}
             <Button
@@ -127,12 +155,12 @@ export function DirectorySelector() {
         <CardBody className="p-2 overflow-auto h-[70vh]">
           {baseDir ? (
             <>
-              {/* Toolbar: sort, filters (compact, scrollable row) */}
-              <div className="flex items-center gap-2 px-2 pb-2 border-b border-muted/30 overflow-x-auto whitespace-nowrap no-scrollbar">
+              {/* Toolbar: sort + search (compact, scrollable row) */}
+              <div className="flex flex-wrap items-center gap-2 px-2 pb-2 border-b border-muted/30">
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="text-xs text-tertiary">Sort</span>
                   <select
-                    className="bg-elev-2 border border-muted/40 rounded px-2 h-7 text-xs min-w-[8rem]"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 h-8 text-xs min-w-[7rem] text-secondary placeholder:text-tertiary/70 hover:bg-elev-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
                     value={sortMode}
                     onChange={(e) => setSortMode(e.target.value as any)}
                     title="Sort files"
@@ -143,63 +171,22 @@ export function DirectorySelector() {
                     <option value="recent">Recently Modified</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-xs text-tertiary">Min</span>
-                  <input
-                    type="number"
-                    className="bg-elev-2 border border-muted/40 rounded px-2 h-7 text-xs w-20"
-                    value={minTokens}
-                    min={0}
-                    step={100}
-                    onChange={(e) => setMinTokens(Number(e.target.value || 0))}
-                    title="Only show files with tokens >= Min"
-                  />
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-xs text-tertiary">Max</span>
-                  <input
-                    type="number"
-                    className="bg-elev-2 border border-muted/40 rounded px-2 h-7 text-xs w-20"
-                    value={maxTokens ?? ''}
-                    min={0}
-                    step={100}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      setMaxTokens(v === '' ? undefined : Number(v))
-                    }}
-                    title="Hide files with tokens > Max"
-                  />
-                </div>
                 <div className="flex items-center gap-1 flex-1 min-w-[160px]">
-                  <span className="text-xs text-tertiary">Filter</span>
+                  <span className="text-xs text-tertiary">Search</span>
                   <input
                     type="text"
-                    className="bg-elev-2 border border-muted/40 rounded px-2 h-7 text-xs w-full"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 h-8 text-xs w-full text-secondary placeholder:text-tertiary/70 hover:bg-elev-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
                     placeholder="path contains..."
-                    value={textFilter}
-                    onChange={(e) => setTextFilter(e.target.value)}
-                    title="Filter by path substring"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    title="Search by path substring"
                   />
-                </div>
-                <div className="flex items-center gap-3 pl-1 shrink-0">
-                  <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
-                    <input className="align-middle" type="checkbox" checked={hideBinary} onChange={(e) => setHideBinary(e.target.checked)} />
-                    <span>Binary</span>
-                  </label>
-                  <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
-                    <input className="align-middle" type="checkbox" checked={hideLocks} onChange={(e) => setHideLocks(e.target.checked)} />
-                    <span>Locks</span>
-                  </label>
-                  <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
-                    <input className="align-middle" type="checkbox" checked={hideArtifacts} onChange={(e) => setHideArtifacts(e.target.checked)} />
-                    <span>Artifacts</span>
-                  </label>
                 </div>
               </div>
               <FileList
                 isTreeCollapsed={isTreeCollapsed}
                 sortMode={sortMode}
-                filters={{ minTokens, maxTokens, text: textFilter, hideBinary, hideLocks, hideArtifacts }}
+                filters={{ search }}
               />
             </>
           ) : (

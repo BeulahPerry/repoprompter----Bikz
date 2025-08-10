@@ -124,6 +124,46 @@ export function RepoProvider({ children }: RepoProviderProps) {
     }
   }, [selectedFiles, baseDir])
 
+  // Background: precompute tokens for ALL files when a repo is opened
+  // Runs once per file list load; computes in batches and yields to UI
+  useEffect(() => {
+    if (!baseDir || fileList.length === 0) return
+
+    let cancelled = false
+    const BATCH = 60
+
+    const run = async () => {
+      try {
+        // Only compute for files missing tokens; skip folders/root markers
+        const pending = fileList.filter(p => p !== '__ROOT__' && !p.endsWith('/') && !fileTokens[p])
+        if (pending.length === 0) return
+
+        for (let i = 0; i < pending.length && !cancelled; i += BATCH) {
+          const batch = pending.slice(i, i + BATCH)
+          const { contents } = await window.api.readMultipleFileContents(baseDir, batch)
+          if (cancelled) break
+
+          Object.entries(contents).forEach(([filePath, content]) => {
+            if (content && !content.startsWith('// File too large') && !content.startsWith('// Error reading file')) {
+              updateFileTokens(filePath, content)
+            }
+          })
+
+          if (i + BATCH < pending.length) {
+            // Yield to UI to keep app responsive
+            await new Promise(r => setTimeout(r, 50))
+          }
+        }
+      } catch (e) {
+        console.error('Background token precompute failed:', e)
+      }
+    }
+
+    const t = setTimeout(run, 100)
+    return () => { cancelled = true; clearTimeout(t) }
+    // Intentionally omit fileTokens from deps to avoid restarting per token update
+  }, [baseDir, fileList])
+
   // Called externally by DirectorySelector on a new directory selection
   const setBaseDir = async (dir: string) => {
     setBaseDirState(dir)
