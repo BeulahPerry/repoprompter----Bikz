@@ -19,6 +19,19 @@ const api: FileSystemApi = {
     console.log('Hello from preload!')
   },
 
+  /** Batch stat files: returns { size, mtimeMs } per file without reading contents. */
+  statFiles: async (baseDir: string, files: string[]) => {
+    if (!baseDir || !files?.length) {
+      return { meta: {}, errors: [] }
+    }
+    try {
+      return await ipcRenderer.invoke('fs:statFiles', { baseDir, files })
+    } catch (error) {
+      console.error('Failed to stat files:', error)
+      throw error
+    }
+  },
+
   selectDirectory: async () => {
     try {
       return await ipcRenderer.invoke('dialog:selectDirectory')

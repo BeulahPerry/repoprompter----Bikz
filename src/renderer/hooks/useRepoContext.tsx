@@ -124,13 +124,13 @@ export function RepoProvider({ children }: RepoProviderProps) {
     }
   }, [selectedFiles, baseDir])
 
-  // Background: precompute tokens for ALL files when a repo is opened
-  // Runs once per file list load; computes in batches and yields to UI
+  // Background: precompute tokens (approx) for ALL files when a repo is opened
+  // Size-first: stat files and estimate tokens = ceil(size/4). No content reads here.
   useEffect(() => {
     if (!baseDir || fileList.length === 0) return
 
     let cancelled = false
-    const BATCH = 60
+    const BATCH = 200
 
     const run = async () => {
       try {
@@ -140,18 +140,18 @@ export function RepoProvider({ children }: RepoProviderProps) {
 
         for (let i = 0; i < pending.length && !cancelled; i += BATCH) {
           const batch = pending.slice(i, i + BATCH)
-          const { contents } = await window.api.readMultipleFileContents(baseDir, batch)
+          const { meta } = await window.api.statFiles(baseDir, batch)
           if (cancelled) break
 
-          Object.entries(contents).forEach(([filePath, content]) => {
-            if (content && !content.startsWith('// File too large') && !content.startsWith('// Error reading file')) {
-              updateFileTokens(filePath, content)
-            }
+          Object.entries(meta || {}).forEach(([filePath, info]) => {
+            if (!info) return
+            const approx = Math.ceil((info.size || 0) / 4)
+            setFileTokenApprox(filePath, approx)
           })
 
           if (i + BATCH < pending.length) {
             // Yield to UI to keep app responsive
-            await new Promise(r => setTimeout(r, 50))
+            await new Promise(r => setTimeout(r, 20))
           }
         }
       } catch (e) {
@@ -206,6 +206,14 @@ export function RepoProvider({ children }: RepoProviderProps) {
     setFileTokens(prev => ({
       ...prev,
       [filePath]: tokenInfo.count
+    }))
+  }
+
+  // Set token count directly (used for size-based background approximation)
+  const setFileTokenApprox = (filePath: string, tokens: number) => {
+    setFileTokens(prev => ({
+      ...prev,
+      [filePath]: tokens
     }))
   }
 

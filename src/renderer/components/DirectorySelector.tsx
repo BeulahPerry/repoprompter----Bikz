@@ -66,7 +66,7 @@ export function DirectorySelector() {
               {baseDir ? baseDir.split('/').pop() : 'Repository'}
             </h3>
           </div>
-          <div className="flex items-center gap-2 whitespace-nowrap overflow-x-auto no-scrollbar text-secondary">
+          <div className="flex items-center gap-2 whitespace-nowrap overflow-x-auto no-scrollbar text-secondary pt-1.5">
             <Button
               onClick={handleSelectDirectory}
               variant={baseDir ? 'ghost' : 'primary'}
@@ -131,7 +131,7 @@ export function DirectorySelector() {
               aria-label="Expand all folders"
               title="Expand all"
               disabled={!baseDir}
-              className="shrink-0 px-2"
+              className="shrink-0 px-2 hover:bg-black/5 dark:hover:bg-white/10"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -144,7 +144,7 @@ export function DirectorySelector() {
               aria-label="Collapse all folders"
               title="Collapse all"
               disabled={!baseDir}
-              className="shrink-0 px-2"
+              className="shrink-0 h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10"
             >
               <svg className="w-4 h-4 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -152,7 +152,7 @@ export function DirectorySelector() {
             </Button>
           </div>
         </CardHeader>
-        <CardBody className="p-2 overflow-auto h-[70vh]">
+        <CardBody className="p-2 overflow-auto h-[70vh] bg-elev-2">
           {baseDir ? (
             <>
               {/* Toolbar: sort + search (compact, scrollable row) */}
@@ -160,7 +160,7 @@ export function DirectorySelector() {
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="text-xs text-tertiary">Sort</span>
                   <select
-                    className="bg-elev-2 border border-muted/40 rounded px-2 h-8 text-xs min-w-[7rem] text-secondary placeholder:text-tertiary/70 hover:bg-elev-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+                    className="bg-elev-2 border border-muted/40 rounded px-2 h-8 text-xs min-w-[7rem] text-secondary dark:text-white hover:bg-elev-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 dark:[color-scheme:dark]"
                     value={sortMode}
                     onChange={(e) => setSortMode(e.target.value as any)}
                     title="Sort files"
@@ -175,7 +175,7 @@ export function DirectorySelector() {
                   <span className="text-xs text-tertiary">Search</span>
                   <input
                     type="text"
-                    className="bg-elev-2 border border-muted/40 rounded px-2 h-8 text-xs w-full text-secondary placeholder:text-tertiary/70 hover:bg-elev-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+                    className="w-full h-8 px-2 rounded-lg bg-black/5 dark:bg-white/5 border border-surface text-primary placeholder-tertiary text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
                     placeholder="path contains..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -230,6 +230,7 @@ export function DirectorySelector() {
                     }}
                     className="p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
                     aria-label={`${activeGroupName === group.name ? 'Collapse' : 'Expand'} group ${group.name}`}
+                    title={`${activeGroupName === group.name ? 'Collapse' : 'Expand'} group`}
                     aria-expanded={activeGroupName === group.name}
                   >
                     <svg 
@@ -253,6 +254,7 @@ export function DirectorySelector() {
                     }}
                     className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 rounded hover:bg-danger/10 text-danger transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-danger/50 focus-visible:ring-offset-1"
                     aria-label={`Delete group ${group.name}`}
+                    title="Delete group"
                   >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

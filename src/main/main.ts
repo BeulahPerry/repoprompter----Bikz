@@ -109,6 +109,45 @@ async function createMainWindow() {
     }
   })
 
+  // Return metadata for multiple files (size, mtime) without reading contents
+  ipcMain.handle('fs:statFiles', async (_, { baseDir, files }: { baseDir: string, files: string[] }) => {
+    const meta: Record<string, { size: number, mtimeMs: number }> = {}
+    const errors: string[] = []
+
+    await Promise.all(
+      files.map(async (file: string) => {
+        try {
+          const fullPath = path.join(baseDir, file)
+          const st = await fs.promises.lstat(fullPath)
+          if (st.isDirectory()) {
+            errors.push(`${file} (is a directory)`) 
+            return
+          }
+          // If symlink, resolve to get real stats
+          if (st.isSymbolicLink()) {
+            try {
+              const real = await fs.promises.stat(fullPath)
+              if (real.isDirectory()) {
+                errors.push(`${file} (symlink to directory)`) 
+                return
+              }
+              meta[file] = { size: real.size, mtimeMs: real.mtimeMs }
+              return
+            } catch (e) {
+              errors.push(`${file} (broken symlink)`) 
+              return
+            }
+          }
+          meta[file] = { size: st.size, mtimeMs: st.mtimeMs }
+        } catch (err: any) {
+          errors.push(`${file} (stat error)`) 
+        }
+      })
+    )
+
+    return { meta, errors }
+  })
+
   const devServerUrl = process.env.VITE_DEV_SERVER_URL
 
   if (process.env.NODE_ENV === 'development' && devServerUrl) {

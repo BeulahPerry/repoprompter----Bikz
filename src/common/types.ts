@@ -70,6 +70,9 @@ export interface FileSystemApi {
   /** Batch read multiple files at once; returns an object mapping filenames -> contents and any errors. */
   readMultipleFileContents: (baseDir: string, files: string[]) => Promise<{ contents: Record<string, string>; errors: string[] }>
 
+  /** Batch stat files; returns size and mtimeMs per file without reading contents. */
+  statFiles: (baseDir: string, files: string[]) => Promise<{ meta: Record<string, { size: number; mtimeMs: number }>; errors: string[] }>
+
   /**
    * Config-related IPC calls, for loading/updating per-repo settings and global large-file lists.
    */
