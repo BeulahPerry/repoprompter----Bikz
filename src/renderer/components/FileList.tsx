@@ -501,32 +501,26 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
 
   const isSelected = (node: TreeNode) => {
     if (node.path === '__ROOT__') {
-      // Root is selected if all files and folders are selected
-      const gatherAllPaths = (n: TreeNode): string[] => {
-        const paths: string[] = []
-        if (n.path !== '__ROOT__') {
-          paths.push(n.path)
+      // Root is selected if all files are selected (exclude folders)
+      const gatherAllFiles = (n: TreeNode): string[] => {
+        const files: string[] = []
+        if (n.path !== '__ROOT__' && !n.isFolder) {
+          files.push(n.path)
         }
         if (n.children) {
           n.children.forEach(child => {
-            paths.push(...gatherAllPaths(child))
+            files.push(...gatherAllFiles(child))
           })
         }
-        return paths
+        return files
       }
       
-      const allPaths = gatherAllPaths(node)
-      return allPaths.length > 0 && allPaths.every(path => selectedFiles.includes(path))
+      const allFiles = gatherAllFiles(node)
+      return allFiles.length > 0 && allFiles.every(path => selectedFiles.includes(path))
     }
     
-    // For folders, check if the folder itself is selected OR if all its contents are selected
+    // For folders, check if all their file contents are selected (folders themselves are not selectable)
     if (node.isFolder) {
-      // First check if the folder itself is explicitly selected
-      if (selectedSet.has(node.path)) {
-        return true
-      }
-      
-      // If not explicitly selected, check if all contents are selected
       const gatherFiles = (n: TreeNode): string[] => {
         if (!n.isFolder) return [n.path]
         if (!n.children) return []
@@ -560,40 +554,40 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
       pausePrecomputeSoon()
       if (nodeData.isFolder) {
         if (nodeData.path === '__ROOT__') {
-          // Special handling for root - select/unselect ALL items (files + directories)
-          const gatherAllPaths = (n: TreeNode): string[] => {
-            const paths: string[] = []
-            if (n.path !== '__ROOT__') {
-              paths.push(n.path) // Include both files and folders
+          // Special handling for root - select/unselect ALL files (exclude directories)
+          const gatherAllFiles = (n: TreeNode): string[] => {
+            const files: string[] = []
+            if (n.path !== '__ROOT__' && !n.isFolder) {
+              files.push(n.path) // Only include files, not folders
             }
             if (n.children) {
               n.children.forEach(child => {
-                paths.push(...gatherAllPaths(child))
+                files.push(...gatherAllFiles(child))
               })
             }
-            return paths
+            return files
           }
           
-          const allPaths = gatherAllPaths(nodeData)
-          const allSelected = allPaths.every(path => selectedFiles.includes(path))
+          const allFiles = gatherAllFiles(nodeData)
+          const allSelected = allFiles.length > 0 && allFiles.every(path => selectedFiles.includes(path))
           
           if (allSelected) {
-            // Unselect all
-            allPaths.forEach(path => {
+            // Unselect all files
+            allFiles.forEach(path => {
               if (selectedFiles.includes(path)) {
                 toggleSelectedFile(path)
               }
             })
           } else {
-            // Select all
-            allPaths.forEach(path => {
+            // Select all files
+            allFiles.forEach(path => {
               if (!selectedFiles.includes(path)) {
                 toggleSelectedFile(path)
               }
             })
           }
         } else {
-          // For regular folders, gather all descendant files AND include the folder itself
+          // For regular folders, gather all descendant files (exclude the folder itself)
           const gatherFiles = (n: TreeNode): string[] => {
             if (!n.isFolder) return [n.path]
             if (!n.children) return []
@@ -601,19 +595,18 @@ export function FileList({ isTreeCollapsed = false, tokenBudget = 200_000, sortM
           }
           
           const allFiles = gatherFiles(nodeData)
-          const allPaths = [nodeData.path, ...allFiles] // Include the folder itself
-          const allSelected = allPaths.every(path => selectedFiles.includes(path))
+          const allSelected = allFiles.length > 0 && allFiles.every(path => selectedFiles.includes(path))
           
           if (allSelected) {
-            // Unselect all (folder and its files)
-            allPaths.forEach(path => {
+            // Unselect all files in this folder
+            allFiles.forEach(path => {
               if (selectedFiles.includes(path)) {
                 toggleSelectedFile(path)
               }
             })
           } else {
-            // Select all (folder and its files)
-            allPaths.forEach(path => {
+            // Select all files in this folder
+            allFiles.forEach(path => {
               if (!selectedFiles.includes(path)) {
                 toggleSelectedFile(path)
               }

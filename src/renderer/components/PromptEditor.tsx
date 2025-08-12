@@ -1,11 +1,10 @@
 import React, { useState } from 'react'
 import { useRepoContext } from '../hooks/useRepoContext'
-import { getTokenInfo } from '../../common/tokenUtils'
 import { Card, CardBody } from './ui/Card'
 import { Button } from './ui/Button'
 
 export function PromptEditor() {
-  const { baseDir, selectedFiles, updateFileTokens } = useRepoContext()
+  const { baseDir, selectedFiles, updateFileTokens, totalSelectedTokens } = useRepoContext()
   const [userInstructions, setUserInstructions] = useState('')
   const [combinedPrompt, setCombinedPrompt] = useState('')
   const [showCombinedPrompt, setShowCombinedPrompt] = useState(false)
@@ -31,65 +30,76 @@ new content here
 `
 
   async function buildPrompt(includeXmlInstructions: boolean) {
-    const { contents: fileContentMap, errors } = await window.api.readMultipleFileContents(baseDir, selectedFiles)
-    
-    if (errors.length > 0) {
-      alert(`Warning: Some files could not be loaded:\n${errors.join('\n')}`)
-    }
-    
-    // Calculate and cache token counts for all loaded files
-    Object.entries(fileContentMap).forEach(([filePath, content]) => {
-      if (content && !content.startsWith('// File too large') && !content.startsWith('// Error reading file')) {
-        const tokenInfo = getTokenInfo(content)
-        updateFileTokens(filePath, tokenInfo.tokenCount)
+    let fileContentMap: Record<string, string> = {}
+    if (selectedFiles.length > 0) {
+      const { contents, errors } = await window.api.readMultipleFileContents(baseDir, selectedFiles)
+      fileContentMap = contents
+      if (errors.length > 0) {
+        alert(`Warning: Some files could not be loaded:\n${errors.join('\n')}`)
       }
-    })
-    
+      // Calculate and cache token counts for all loaded files
+      Object.entries(fileContentMap).forEach(([filePath, content]) => {
+        if (content && !content.startsWith('// File too large') && !content.startsWith('// Error reading file')) {
+          updateFileTokens(filePath, content)
+        }
+      })
+    }
+
     let combinedContent = ''
-    
+
     if (includeXmlInstructions) {
       combinedContent += xmlSystemPrompt + '\n\n'
     }
-    
+
     combinedContent += '<file_map>\n'
-    
+
     Object.entries(fileContentMap).forEach(([filePath, content]) => {
       combinedContent += `<file name="${filePath}">\n${content}\n</file>\n\n`
     })
-    
+
     combinedContent += '</file_map>\n\n'
     combinedContent += `<user_instructions>\n${userInstructions}\n</user_instructions>`
-    
+
     return combinedContent
   }
 
   const handleCopy = async () => {
-    const prompt = await buildPrompt(false)
-    navigator.clipboard.writeText(prompt)
-    const button = document.querySelector('#copy-button') as HTMLButtonElement
-    if (button) {
-      const originalText = button.textContent
-      button.textContent = '✓ Copied!'
-      button.classList.add('bg-success')
-      setTimeout(() => {
-        button.textContent = originalText
-        button.classList.remove('bg-success')
-      }, 2000)
+    try {
+      const prompt = await buildPrompt(false)
+      await navigator.clipboard.writeText(prompt)
+      const button = document.querySelector('#copy-button') as HTMLButtonElement
+      if (button) {
+        const originalText = button.textContent
+        button.textContent = '✓ Copied!'
+        button.classList.add('bg-success')
+        setTimeout(() => {
+          button.textContent = originalText
+          button.classList.remove('bg-success')
+        }, 2000)
+      }
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error)
+      alert('Failed to copy to clipboard. Please try again or check browser permissions.')
     }
   }
 
   const handleCopyWithXML = async () => {
-    const prompt = await buildPrompt(true)
-    navigator.clipboard.writeText(prompt)
-    const button = document.querySelector('#copy-xml-button') as HTMLButtonElement
-    if (button) {
-      const originalText = button.textContent
-      button.textContent = '✓ Copied!'
-      button.classList.add('bg-success')
-      setTimeout(() => {
-        button.textContent = originalText
-        button.classList.remove('bg-success')
-      }, 2000)
+    try {
+      const prompt = await buildPrompt(true)
+      await navigator.clipboard.writeText(prompt)
+      const button = document.querySelector('#copy-xml-button') as HTMLButtonElement
+      if (button) {
+        const originalText = button.textContent
+        button.textContent = '✓ Copied!'
+        button.classList.add('bg-success')
+        setTimeout(() => {
+          button.textContent = originalText
+          button.classList.remove('bg-success')
+        }, 2000)
+      }
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error)
+      alert('Failed to copy to clipboard. Please try again or check browser permissions.')
     }
   }
 
@@ -99,8 +109,9 @@ new content here
     setShowCombinedPrompt(true)
   }
 
-  const totalTokens = Object.values(useRepoContext().fileTokens).reduce((sum, count) => sum + count, 0)
+  const totalTokens = totalSelectedTokens
   const hasSelectedFiles = selectedFiles.length > 0
+  const hasInstructions = userInstructions.trim().length > 0
 
   return (
     <Card className="h-[50%]">
@@ -129,8 +140,8 @@ new content here
             placeholder="Type your instructions here..."
             className="w-full h-full p-4 bg-black/5 dark:bg-white/5 border border-surface rounded-lg 
                      text-primary placeholder-tertiary resize-none focus:outline-none 
-                     focus:ring-2 focus:ring-primary/50 transition-all font-mono text-sm"
-            disabled={!hasSelectedFiles}
+                     focus:ring-2 focus:ring-primary/50 transition-all font-mono text-sm pointer-events-auto"
+            aria-label="User instructions"
           />
         </div>
 
@@ -139,7 +150,7 @@ new content here
             id="copy-button"
             onClick={handleCopy}
             variant="primary"
-            disabled={!hasSelectedFiles || !userInstructions.trim()}
+            disabled={!(hasSelectedFiles || hasInstructions)}
             className="flex-1"
           >
             Copy
@@ -148,15 +159,15 @@ new content here
             id="copy-xml-button"
             onClick={handleCopyWithXML}
             variant="secondary"
-            disabled={!hasSelectedFiles || !userInstructions.trim()}
-            className="flex-1"
+            disabled={!(hasSelectedFiles || hasInstructions)}
+            className="flex-1 whitespace-nowrap"
           >
             Copy with XML
           </Button>
           <Button
             onClick={handleViewCombined}
             variant="ghost"
-            disabled={!hasSelectedFiles || !userInstructions.trim()}
+            disabled={!(hasSelectedFiles || hasInstructions)}
           >
             View combined prompt
           </Button>
@@ -187,9 +198,14 @@ new content here
                 />
                 <div className="flex gap-2 mt-4">
                   <Button
-                    onClick={() => {
-                      navigator.clipboard.writeText(combinedPrompt)
-                      setShowCombinedPrompt(false)
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(combinedPrompt)
+                        setShowCombinedPrompt(false)
+                      } catch (error) {
+                        console.error('Failed to copy to clipboard:', error)
+                        alert('Failed to copy to clipboard. Please try again or check browser permissions.')
+                      }
                     }}
                     variant="primary"
                   >

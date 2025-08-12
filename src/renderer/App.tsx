@@ -35,12 +35,6 @@ function App() {
             {/* Left spacer to clear macOS window controls */}
             <div className="w-16 sm:w-20 md:w-24 h-full" />
             <div className="flex items-center gap-3">
-              <img
-                src="/repoprompter-logo.png"
-                alt="RepoPrompter logo"
-                className="w-6 h-6 rounded-sm shadow-sm pointer-events-none select-none"
-                draggable={false}
-              />
               <h1 className="text-lg font-semibold text-primary">RepoPrompter</h1>
               <span className="text-xs text-secondary">Build AI prompts from your codebase</span>
             </div>

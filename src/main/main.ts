@@ -85,10 +85,31 @@ async function readDirRecursive(dirPath: string): Promise<string[]> {
 }
 
 function getAppIconPath() {
-  // In dev, use public/; in production, use the built renderer assets
-  return app.isPackaged
-    ? path.join(__dirname, '..', 'renderer', 'repoprompter-logo.png')
-    : path.join(process.cwd(), 'public', 'repoprompter-logo.png')
+  // Prefer a robust lookup to handle dev and packaged layouts
+  const candidates: string[] = []
+
+  if (app.isPackaged) {
+    // When packaged, Vite copies files from public/ to the dist root (alongside main/ and renderer/)
+    candidates.push(
+      path.join(__dirname, '..', 'repoprompter-logo.png'),
+      path.join(__dirname, '..', 'renderer', 'repoprompter-logo.png'),
+      path.join(process.resourcesPath || path.join(__dirname, '..'), 'repoprompter-logo.png')
+    )
+  } else {
+    // Development: served from project public/
+    candidates.push(
+      path.join(process.cwd(), 'public', 'repoprompter-logo.png'),
+      path.join(process.cwd(), 'repoprompter-logo.png')
+    )
+  }
+
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p
+    } catch {}
+  }
+  // Fallback to a path in public/ (dev) to avoid empty icon
+  return path.join(process.cwd(), 'public', 'repoprompter-logo.png')
 }
 
 async function createMainWindow() {
