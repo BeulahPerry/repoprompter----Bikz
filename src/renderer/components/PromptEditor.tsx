@@ -162,14 +162,14 @@ new content here
             disabled={!(hasSelectedFiles || hasInstructions)}
             className="flex-1 whitespace-nowrap"
           >
-            Copy with XML
+            Copy + XML
           </Button>
           <Button
             onClick={handleViewCombined}
             variant="ghost"
             disabled={!(hasSelectedFiles || hasInstructions)}
           >
-            View combined prompt
+            Preview
           </Button>
         </div>
 

@@ -134,7 +134,7 @@ export function DirectorySelector() {
               className="shrink-0 px-2 hover:bg-black/5 dark:hover:bg-white/10"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M6 9l6 6 6-6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </Button>
             <Button
@@ -144,10 +144,10 @@ export function DirectorySelector() {
               aria-label="Collapse all folders"
               title="Collapse all"
               disabled={!baseDir}
-              className="shrink-0 h-8 w-8 p-0 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10"
+              className="shrink-0 px-2 hover:bg-black/5 dark:hover:bg-white/10"
             >
-              <svg className="w-4 h-4 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M9 18l6-6-6-6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </Button>
           </div>
